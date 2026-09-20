@@ -1,29 +1,3 @@
-
-import os
-import threading
-from flask import Flask
-
-# Dummy HTTP server Render ke port timeout error ko rokne ke liye
-app = Flask('')
-
-@app.route('/', methods=['GET', 'HEAD'])
-def home():
-    return "Bot is alive!", 200
-
-def run():
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
-
-def keep_alive():
-    t = threading.Thread(target=run)
-    t.start()
-
-# Flask server start karein
-keep_alive()
-
-# --- Aapka baaki purana discord bot code niche same rahega ---
-
-
 import asyncio
 import os
 import threading
@@ -90,12 +64,14 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Global IDs (Apne Server aur YouTube Channel ke hisab se set karein)
-GUILD_ID = None  # Server ID (optional for global slash commands)
-MEMBER_COUNT_CHANNEL_ID = None  # Voice channel ID for Member Counter
-YT_SUBS_CHANNEL_ID = None  # Voice channel ID for YT Subs Counter
-YT_CHANNEL_ID = "UC_YOUR_YOUTUBE_CHANNEL_ID"  # YouTube Channel ID
-YT_API_KEY = "YOUR_YOUTUBE_API_KEY"  # Optional: YouTube Data API Key
+# Global Variables
+GUILD_ID = None
+MEMBER_COUNT_CHANNEL_ID = None
+YT_SUBS_CHANNEL_ID = None
+
+# ⚠️ Apni YouTube Channel ID yahan paste karein (e.g. "UC_XXXXXXXXXXXXXX")
+YT_CHANNEL_ID = "UCrUST825NDTC2S3h6bUK6Lg"
+YT_API_KEY = "AIzaSyD6omIKiYD8VQuH972HalMsX6fwi19bX4w"
 
 
 # ==========================================
@@ -117,7 +93,6 @@ class TicketCreateView(discord.ui.View):
     guild = interaction.guild
     user = interaction.user
 
-    # Check if channel already exists
     channel_name = f"ticket-{user.name}".lower().replace(" ", "-")
     existing_channel = discord.utils.get(
         guild.text_channels, name=channel_name
@@ -129,7 +104,6 @@ class TicketCreateView(discord.ui.View):
           ephemeral=True,
       )
 
-    # Permission Overwrites
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(read_messages=False),
         user: discord.PermissionOverwrite(
@@ -190,18 +164,15 @@ class TicketCloseView(discord.ui.View):
 async def on_ready():
   print(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
-  # Add Persistent Views
   bot.add_view(TicketCreateView())
   bot.add_view(TicketCloseView())
 
-  # Sync Slash Commands
   try:
     synced = await bot.tree.sync()
     print(f"Synced {len(synced)} slash command(s)")
   except Exception as e:
     print(f"Failed to sync slash commands: {e}")
 
-  # Set Presence
   await bot.change_presence(
       activity=discord.Activity(
           type=discord.ActivityType.watching,
@@ -209,7 +180,6 @@ async def on_ready():
       )
   )
 
-  # Start Background Counter Loop
   update_counters.start()
 
 
@@ -218,14 +188,14 @@ async def on_message(message: discord.Message):
   if message.author.bot:
     return
 
-  # Respond when bot is mentioned
+  # Respond when bot is mentioned directly
   if bot.user.mentioned_in(message) and not message.mention_everyone:
     embed = discord.Embed(
         title="👋 Hello! Main hoon Raze Assistant",
         description=(
-            f"Aap mujhe mention kyu kar rahe ho? Mujhe commands dene ke liye"
-            f" **`/help`** type karein!\n\n**Server:**"
-            f" {message.guild.name}\n**Bot Status:** 🟢 Online 24/7"
+            f"Aapne mujhe mention kiya hai! Commands use karne ke liye"
+            f" **`/help`** type karein.\n\n**Server:**"
+            f" {message.guild.name}\n**Status:** 🟢 Online 24/7"
         ),
         color=discord.Color.blue(),
     )
@@ -248,8 +218,12 @@ async def update_counters():
         member_count = guild.member_count
         await channel.edit(name=f"💙 Members: {member_count}")
 
-    # 2. Update YouTube Subs Count Voice Channel (If API Key Present)
-    if YT_SUBS_CHANNEL_ID and YT_API_KEY and YT_CHANNEL_ID:
+    # 2. Update YouTube Subs Count Voice Channel
+    if (
+        YT_SUBS_CHANNEL_ID
+        and YT_API_KEY
+        and YT_CHANNEL_ID != "UC_YOUR_YOUTUBE_CHANNEL_ID"
+    ):
       url = f"https://www.googleapis.com/youtube/v3/channels?part=statistics&id={YT_CHANNEL_ID}&key={YT_API_KEY}"
       async with aiohttp.ClientSession() as session:
         async with session.get(url) as resp:
@@ -279,7 +253,9 @@ async def help_command(interaction: discord.Interaction):
       color=discord.Color.purple(),
   )
   embed.add_field(
-      name="📌 General", value="`/ping` - Check bot latency\n`/help` - Show help menu", inline=False
+      name="📌 General",
+      value="`/ping` - Check bot latency\n`/help` - Show help menu",
+      inline=False,
   )
   embed.add_field(
       name="⚙️ Moderation & Utility",
@@ -296,7 +272,7 @@ async def help_command(interaction: discord.Interaction):
   )
   embed.add_field(
       name="📊 Live Stats",
-      value="`/setup-counters` - Configure member counter channel ID",
+      value="`/setup-counters` - Configure member & YT counter voice channels",
       inline=False,
   )
   embed.set_footer(
@@ -324,8 +300,10 @@ async def clear(interaction: discord.Interaction, amount: int):
   )
 
 
-# /embed Command (Sapphire Style Rich Embed Builder)
-@bot.tree.command(name="embed", description="Create a custom Sapphire-style Embed")
+# /embed Command (Sapphire Style Embed Builder)
+@bot.tree.command(
+    name="embed", description="Create a custom Sapphire-style Embed"
+)
 @app_commands.checks.has_permissions(manage_messages=True)
 async def custom_embed(
     interaction: discord.Interaction,
@@ -359,7 +337,9 @@ async def custom_embed(
 
 
 # /poll Command
-@bot.tree.command(name="poll", description="Create a simple yes/no or custom poll")
+@bot.tree.command(
+    name="poll", description="Create a simple yes/no or custom poll"
+)
 async def create_poll(interaction: discord.Interaction, question: str):
   embed = discord.Embed(
       title="📊 Community Poll",
@@ -395,25 +375,29 @@ async def ticket_setup(interaction: discord.Interaction):
   )
 
 
-# /setup-counters Command
+# /setup-counters Command (With Voice Channel Picker)
 @bot.tree.command(
-    name="setup-counters", description="Link Voice Channel for Member Count"
+    name="setup-counters",
+    description="Link Voice Channels for Member & YT Counters",
 )
 @app_commands.checks.has_permissions(administrator=True)
 async def setup_counters(
-    interaction: discord.Interaction, voice_channel_id: str
+    interaction: discord.Interaction,
+    member_channel: discord.VoiceChannel,
+    yt_subs_channel: discord.VoiceChannel = None,
 ):
-  global MEMBER_COUNT_CHANNEL_ID
-  try:
-    MEMBER_COUNT_CHANNEL_ID = int(voice_channel_id)
-    await interaction.response.send_message(
-        f"✅ Member counter channel set to `<#{MEMBER_COUNT_CHANNEL_ID}>`!",
-        ephemeral=True,
+  global MEMBER_COUNT_CHANNEL_ID, YT_SUBS_CHANNEL_ID
+
+  MEMBER_COUNT_CHANNEL_ID = member_channel.id
+  msg = f"✅ Member Counter Channel set to: {member_channel.mention}"
+
+  if yt_subs_channel:
+    YT_SUBS_CHANNEL_ID = yt_subs_channel.id
+    msg += (
+        f"\n✅ YouTube Subs Counter Channel set to: {yt_subs_channel.mention}"
     )
-  except ValueError:
-    await interaction.response.send_message(
-        "❌ Please provide a valid Voice Channel ID.", ephemeral=True
-    )
+
+  await interaction.response.send_message(msg, ephemeral=True)
 
 
 # ==========================================
